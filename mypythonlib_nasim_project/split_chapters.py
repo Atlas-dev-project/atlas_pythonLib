@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+import sys
 
 def split_into_chapters(text):
     # Split the text by chapter markers
@@ -22,22 +23,30 @@ def process_text_file(input_file_path, output_directory, info_output_directory):
     with open(input_file_path, 'r', encoding='utf-8') as file:
         text = file.read()
 
-    # Extract and save book info before the first @@ marker
-    if '@@' in text:
-        book_info = text.split('@@', 1)[0].strip()
-        info_file_path = os.path.join(info_output_directory, os.path.basename(input_file_path).replace('.txt', '_info.txt'))
-        with open(info_file_path, 'w', encoding='utf-8') as info_file:
-            info_file.write(book_info)
-        print(f"Book info saved to: {info_file_path}")
+    # If no @@ markers are found, export the full text to the next folder
+    if '@@' not in text:
+        output_file_path = os.path.join(output_directory, os.path.basename(input_file_path))
+        with open(output_file_path, 'w', encoding='utf-8') as file:
+            file.write(text.strip())
+        print(f"No chapter markers found. Full text exported to: {output_file_path}")
+        return
 
-        # Start processing from the first @@ marker
-        text = text.split('@@', 1)[1]
-        text = '@@' + text  # Add the marker back to the beginning
+    # Extract and save book info before the first @@ marker
+    book_info = text.split('@@', 1)[0].strip()
+    info_file_path = os.path.join(info_output_directory, os.path.basename(input_file_path).replace('.txt', '_info.txt'))
+    with open(info_file_path, 'w', encoding='utf-8') as info_file:
+        info_file.write(book_info)
+    print(f"Book info saved to: {info_file_path}")
+
+    # Start processing from the first @@ marker
+    text = text.split('@@', 1)[1]
+    text = '@@' + text  # Add the marker back to the beginning
 
     chapters = split_into_chapters(text)
 
     for index, (title, content) in enumerate(chapters):
-        chapter_number = re.findall(r'\d+', title)[0] if re.findall(r'\d+', title) else str(index + 1)
+        # Use the index as the chapter number instead of extracting it from the title
+        chapter_number = str(index + 1)
         output_file_name = f"Chapitre_{chapter_number}.txt"
         output_file_path = os.path.join(output_directory, output_file_name)
         

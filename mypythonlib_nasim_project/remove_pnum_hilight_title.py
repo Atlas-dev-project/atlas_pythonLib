@@ -2,7 +2,8 @@
 import os
 import re
 import unicodedata
-current_file_path = os.path.abspath(__file__)
+import sys
+import collections
 
 # Function to highlight chapter titles
 def highlight_titles(text, titles):
@@ -39,67 +40,172 @@ def highlight_titles(text, titles):
 
     return normalized_text, log_entries
 
-# Function to remove standalone numbers, skipping lines with '@@'
-def remove_numbers(text):
-    log_entries = []
-
-    def replace_number(match):
-        line = match.group(0)
-        if '@@' in line:
-            return line  # Skip lines with '@@'
-        else:
-            number = int(match.group(2))
-            log_entries.append(f"Removed number: {number}")
-            return match.group(1) + match.group(3)
-
-    number_pattern = re.compile(r'(\s+)(\d+)(\s*\n\s*\n)')
-    cleaned_text = number_pattern.sub(replace_number, text)
-
-    return cleaned_text, log_entries
-
-# Function to remove phrases at the start of paragraphs
-def remove_phrase_at_paragraph_start(text, phrases):
+# Function to remove phrases at the start or end of paragraphs, even if split across lines
+def remove_phrase_at_paragraph_start_or_end(text, phrases):
     log_entries = []
 
     for phrase in phrases:
-        phrase_pattern = re.compile(r'(?<=\n\n)' + re.escape(phrase) + r'(?=\s)', re.MULTILINE)
-        text, count = phrase_pattern.subn('', text)
-        if count > 0:
-            log_entries.append(f"Removed phrase: {phrase}")
+        # Escape the phrase and handle potential line breaks or punctuation
+        phrase_pattern = re.compile(r'(\n\s*' + re.escape(phrase.replace('\n', ' ')) + r'\s*\n)', re.IGNORECASE)
+        start_pattern = re.compile(r'(^\s*' + re.escape(phrase.replace('\n', ' ')) + r'\s*$)', re.IGNORECASE)
+        end_pattern = re.compile(r'(^\s*' + re.escape(phrase.replace('\n', ' ')) + r'\s*$)', re.IGNORECASE)
+
+        # Replace the phrases in the text
+        text, count = phrase_pattern.subn('\n\n', text)  # Add paragraph break after removal
+        text, start_count = start_pattern.subn('', text)
+        text, end_count = end_pattern.subn('', text)
+
+        total_count = count + start_count + end_count
+        if total_count > 0:
+            log_entries.append(f"Removed phrase: {phrase}, Total Occurrences: {total_count}")
 
     return text, log_entries
 
+# Function to remove page numbers based on the rules provided
+def remove_page_numbers(text):
+    log_entries = []
+    first_pass_removed = set()
+    second_pass_removed = set()
+    removed_numbers = collections.defaultdict(int)
+
+    # Pattern to match numbers at the end of paragraphs with no text before or after them
+    number_pattern = re.compile(r'(\n\s*)(\d{1,5})(\s*\n)')
+
+    # First scan: Remove numbers at the end of paragraphs within the 0 to 10,000 range
+    def first_pass_replace(match):
+        number = int(match.group(2))
+        if 0 <= number <= 10000 and (not first_pass_removed or number <= max(first_pass_removed) + 20):
+            first_pass_removed.add(number)
+            removed_numbers[number] += 1
+            return match.group(1) + '\n\n'  # Preserve paragraph break after removing the number
+        return match.group(0)
+
+    cleaned_text = number_pattern.sub(first_pass_replace, text)
+
+    # Second scan: Remove remaining numbers within the first and last removed range
+    if first_pass_removed:
+        min_removed = min(first_pass_removed)
+        max_removed = max(first_pass_removed)
+
+        def second_pass_replace(match):
+            number = int(match.group(2))
+            if min_removed <= number <= max_removed and number not in first_pass_removed and number not in second_pass_removed:
+                second_pass_removed.add(number)
+                removed_numbers[number] += 1
+                return match.group(1) + '\n\n'  # Preserve paragraph break after removing the number
+            return match.group(0)
+
+        cleaned_text = number_pattern.sub(second_pass_replace, cleaned_text)
+
+    # Log all removed numbers and their counts
+    for number, count in removed_numbers.items():
+        log_entries.append(f"Removed page number: {number} (removed {count} time(s)).")
+
+    return cleaned_text, log_entries
+
+# Function to identify and remove recurring patterns
+def identify_and_remove_recurring_patterns(text, log_entries):
+    # Split text into paragraphs
+    paragraphs = [para.strip() for para in re.split(r'\n{2,}', text) if para.strip()]
+
+    # Debug: Print the number of paragraphs and sample paragraphs
+    print(f"Number of paragraphs: {len(paragraphs)}")
+    for i, para in enumerate(paragraphs[:5]):  # Print first 5 paragraphs
+        print(f"Paragraph {i+1}: {para[:100]}...")  # Print first 100 characters
+
+    # Find recurring phrases
+    def find_recurring_phrases(paragraphs):
+        text_combined = '\n'.join(paragraphs)
+        counts = collections.Counter(text_combined.split('\n'))
+        recurring_phrases = {phrase for phrase, count in counts.items() if count >= 8}
+        
+        # Debug: Print found recurring phrases
+        print(f"Found recurring phrases: {recurring_phrases}")
+        return recurring_phrases
+
+    recurring_phrases = find_recurring_phrases(paragraphs)
+
+    # Debug: Print the recurring phrases that will be removed
+    print(f"Recurring phrases to be removed: {recurring_phrases}")
+
+    # Regex patterns to handle different cases
+    for phrase in recurring_phrases:
+        # Log the identified recurring phrase
+        log_entries.append(f"Identified recurring phrase: {phrase}")
+        
+        # Handle standalone page numbers
+        if re.match(r'^\d+$', phrase):
+            pattern = rf'(?<=\n)\s*{re.escape(phrase)}\s*(?=\n)|^\s*{re.escape(phrase)}\s*(?=\n|$)'
+        else:
+            # Create regex pattern to match the phrase at the beginning or end of paragraphs
+            pattern = rf'(?<=\n)\s*{re.escape(phrase)}\s*(?=\n)|^\s*{re.escape(phrase)}\s*(?=\n|$)'
+        
+        # Debug: Print the regex pattern
+        print(f"Regex pattern: {pattern}")
+        
+        # Remove the recurring phrase from the text and count the number of removals
+        text, count = re.subn(pattern, '', text, flags=re.MULTILINE)
+        
+        # Log the removal of the phrase and how many times it was removed
+        if count > 0:
+            log_entries.append(f"Removed recurring phrase: {phrase}, Occurrences: {count}")
+
+    return text
+
+# Example usage
+log_entries = []
+sample_text = """Your sample text here"""
+processed_text = identify_and_remove_recurring_patterns(sample_text, log_entries)
+
+# Print log entries for review
+print("\nLog entries:")
+for entry in log_entries:
+    print(entry)
+
+# Function to remove standalone periods or lines with only dots
+def remove_standalone_dots(text):
+    log_entries = []
+    # Pattern to match standalone periods or lines with multiple dots with no other text
+    dot_pattern = re.compile(r'^\s*(\.\s*)+$', re.MULTILINE)
+    cleaned_text, count = dot_pattern.subn('', text)
+    if count > 0:
+        log_entries.append(f"Removed {count} lines with standalone periods or dots.")
+    return cleaned_text, log_entries
+
+# Function to process a single text file
 def process_text_file(input_file_path, output_file_path, log_file_path, phrases, titles):
     with open(input_file_path, 'r', encoding='utf-8') as file:
         text = file.read()
 
-    # Extract book info before the first @@ marker
-    if '@@' in text:
-        book_info = text.split('@@', 1)[0].strip()
-        text = text.split('@@', 1)[1]
-        text = '@@' + text  # Add the marker back to the beginning
+    log_entries = []
+
+    # Identify and remove recurring patterns
+    text = identify_and_remove_recurring_patterns(text, log_entries)
 
     # Highlight titles
     highlighted_text, title_log_entries = highlight_titles(text, titles)
+    log_entries.extend(title_log_entries)
 
-    # Remove phrases at the start of paragraphs (after the first @@ marker)
-    book_info, remaining_text = highlighted_text.split('@@', 1)
-    cleaned_text, phrase_log_entries = remove_phrase_at_paragraph_start('@@' + remaining_text, phrases)
+    # Remove phrases at the start or end of paragraphs
+    cleaned_text, phrase_log_entries = remove_phrase_at_paragraph_start_or_end(highlighted_text, phrases)
+    log_entries.extend(phrase_log_entries)
 
-    # Remove standalone numbers
-    cleaned_text, number_log_entries = remove_numbers(cleaned_text)
+    # Remove page numbers based on the specified rules
+    cleaned_text, number_log_entries = remove_page_numbers(cleaned_text)
+    log_entries.extend(number_log_entries)
 
-    # Combine book info with cleaned text
-    final_text = book_info.strip() + '\n\n' + cleaned_text
+    # Remove standalone periods or lines with only dots
+    cleaned_text, dot_log_entries = remove_standalone_dots(cleaned_text)
+    log_entries.extend(dot_log_entries)
 
     with open(output_file_path, 'w', encoding='utf-8') as file:
-        file.write(final_text.strip())
+        file.write(cleaned_text)
 
     with open(log_file_path, 'w', encoding='utf-8') as log_file:
-        log_file.write("\n".join(title_log_entries + number_log_entries + phrase_log_entries))
+        log_file.write("\n".join(log_entries))
 
+# Function to process all text files in a directory
 def process_directory(input_directory, output_directory, log_directory, phrases, titles):
-    print("Hello World")
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
     
@@ -120,25 +226,13 @@ if __name__ == "__main__":
     input_directory = os.path.join("../", "txt_processed/0-main_txt")
     output_directory = os.path.join("../", "txt_processed/1-page_nb_cln")
     log_directory = os.path.join(output_directory, "logs")
-    phrases_to_remove = ['Le danger d’y croire', 'Les Illuminés']
-    titles_to_mark = [
-        "Chapitre 1 Sous les projecteurs",
-        "Chapitre 2 Au printemps comme en hiver",
-        "Chapitre 3 Quand ça tourne... au vinaigre",
-        "Chapitre 4 Le compas dans l'oeil",
-        "Chapitre 5 Les étoiles qui pâlissent",
-        "Chapitre 6 Là où on ne les attendait pas",
-        "Chapitre 7 L'apparition",
-        "Chapitre 8 L'oeil aveugle",
-        "Chapitre 9 Rencontres au zénith",
-        "Chapitre 10 Jour de repos",
-        "Chapitre 11 Erreur sur la ligne",
-        "Chapitre 12 Révélations",
-        "Chapitre 13 Les plans secrets",
-        "Chapitre 14 Retour à l'école",
-        "Chapitre 15 Retrouvailles au sommet",
-        "Chapitre 16 La convocation"
+    
+    # Define the phrases and titles
+    phrases = [
+        "fdsfd"
+    ]
+    titles = [
+        "Chapitre 1"
     ]
 
-    process_directory(input_directory, output_directory, log_directory, phrases_to_remove, titles_to_mark)
-    print("Script completed")
+    process_directory(input_directory, output_directory, log_directory, phrases, titles)
