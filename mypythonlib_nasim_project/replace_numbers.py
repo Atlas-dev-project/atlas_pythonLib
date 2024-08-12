@@ -3,6 +3,7 @@ import os
 import re
 from num2words import num2words
 
+from config import base_dir  # Import the base directory
 
 def replace_numbers_with_words(text):
     log_entries = []
@@ -46,8 +47,8 @@ def process_directory(input_directory, output_directory, log_directory):
             print(f"Processed file saved as {output_file_path}")
 
 if __name__ == "__main__":
-    input_directory = os.path.join("../", "txt_processed/3-paragraph_fix")
-    output_directory = os.path.join("../", "txt_processed/4-numbers_replaced")
+    input_directory = os.path.join(base_dir, "txt_processed/3-paragraph_fix")
+    output_directory = os.path.join(base_dir, "txt_processed/4-numbers_replaced")
     log_directory = os.path.join(output_directory, "logs")
 
     process_directory(input_directory, output_directory, log_directory)

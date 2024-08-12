@@ -2,7 +2,9 @@
 import os
 import re
 import unicodedata
-current_file_path = os.path.abspath(__file__)
+
+from config import base_dir  # Import the base directory
+
 
 # Function to highlight chapter titles
 def highlight_titles(text, titles):
@@ -117,8 +119,8 @@ def process_directory(input_directory, output_directory, log_directory, phrases,
             print(f"Processed file saved as {output_file_path}")
 
 if __name__ == "__main__":
-    input_directory = os.path.join("../", "txt_processed/0-main_txt")
-    output_directory = os.path.join("../", "txt_processed/1-page_nb_cln")
+    input_directory = os.path.join(base_dir)
+    output_directory = os.path.join(base_dir, "txt_processed/1-page_nb_cln")
     log_directory = os.path.join(output_directory, "logs")
     phrases_to_remove = ['Le danger d’y croire', 'Les Illuminés']
     titles_to_mark = [

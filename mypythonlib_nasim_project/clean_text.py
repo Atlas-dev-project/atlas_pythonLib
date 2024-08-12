@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+from config import base_dir  # Import the base directory
 
 def clean_text(text):
     # Remove all occurrences of '@@'
@@ -58,8 +59,8 @@ def process_directory(input_directory, output_directory):
             print(f"Processed file saved as {output_file_path}")
 
 if __name__ == "__main__":
-    input_directory = os.path.join("../", 'txt_processed/2-chapter_split')
-    output_directory = os.path.join("../", 'txt_processed/3-paragraph_fix')
+    input_directory = os.path.join(base_dir, 'txt_processed/2-chapter_split')
+    output_directory = os.path.join(base_dir, 'txt_processed/3-paragraph_fix')
 
     process_directory(input_directory, output_directory)
     print("Script completed")

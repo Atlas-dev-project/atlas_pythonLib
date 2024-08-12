@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import os
 import re
+from config import base_dir  # Import the base directory
 
 def split_into_chapters(text):
     # Split the text by chapter markers
@@ -63,9 +64,9 @@ def process_directory(input_directory, output_directory, info_output_directory):
             print(f"Processed file: {file_name}")
 
 if __name__ == "__main__":
-    input_directory = os.path.join("../", 'txt_processed/1-page_nb_cln')
-    output_directory = os.path.join("../", 'txt_processed/2-chapter_split')
-    info_output_directory = os.path.join("../", 'txt_processed/10-book_info')
+    input_directory = os.path.join(base_dir, 'txt_processed/1-page_nb_cln')
+    output_directory = os.path.join(base_dir, 'txt_processed/2-chapter_split')
+    info_output_directory = os.path.join(base_dir, 'txt_processed/10-book_info')
 
     process_directory(input_directory, output_directory, info_output_directory)
     print("Script completed")
