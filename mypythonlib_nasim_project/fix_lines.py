@@ -9,8 +9,6 @@ import sys
 base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.append(base_dir)
 
-from config import base_dir  # Import the base directory
-
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
 
@@ -37,7 +35,7 @@ def add_break_times(text):
     new_lines = []
 
     # Add break time of 0.5 seconds at the beginning
-    new_lines.append('<break time="0.5s" />')
+    new_lines.append('<break time="0.8s" />')
 
     # Iterate through lines and add the break time after the title on the second line
     for i, line in enumerate(lines):
@@ -46,7 +44,7 @@ def add_break_times(text):
             new_lines[-1] = new_lines[-1] + " <break time=\"2.0s\" />"
 
     # Ensure the text ends with a break
-    new_lines.append('<break time="2.5s" />')
+    new_lines.append('<break time="2.8s" />')
 
     return "\n".join(new_lines)
 
@@ -71,7 +69,8 @@ def fix_broken_hyphens(text):
             if len(parts) == 2:
                 before, after = parts
                 combined_word = before + after
-                if is_valid_word(combined_word):
+                # Updated condition to ensure the next line does not start with a capital letter or the word is not a proper noun
+                if is_valid_word(combined_word) and after.islower() and not next_line[0].isupper():
                     changes.append(f"Removed hyphen in: {last_word} -> {combined_word}")
                     # Remove the hyphen and merge the lines correctly
                     line = line[:-len(last_word)] + combined_word + next_line[len(after):].lstrip()
@@ -81,8 +80,8 @@ def fix_broken_hyphens(text):
 
     text = '\n'.join(corrected_text)
 
-    # Ensure proper merging of broken words without adding extra spaces
-    text = re.sub(r'([a-zàâçéèêëîïôûùüÿñæœ,;])-\s*\n\s*([a-zàâçéèêëîïôûùüÿñæœ])', r'\1\2', text)
+    # Ensure proper merging of broken words without adding extra spaces, avoiding merging names followed by lowercase letters
+    text = re.sub(r'([a-zàâçéèêëîïôûùüÿñæœ,;])-\s*\n\s*(?![A-Z])([a-zàâçéèêëîïôûùüÿñæœ])', r'\1\2', text)
     return text, changes
 
 # Function to handle the removal of unwanted spaces between paragraphs
@@ -97,20 +96,50 @@ def fix_paragraph_spaces(text):
     i = 0
     while i < len(doc):
         token = doc[i]
-        if token.is_alpha and token.is_lower and i + 2 < len(doc) and doc[i + 1].is_space and doc[i + 2].ent_type_ == 'PER':
-            # Merge current token with the next if the next is a proper noun
-            corrected_text.append(token.text + " " + doc[i + 2].text)
-            changes.append(f"Merged: {token.text} {doc[i + 2].text}")
-            i += 3  # Skip the space and the proper noun
+        if token.ent_type_ == 'PER' and i + 1 < len(doc) and doc[i + 1].is_alpha and doc[i + 1].is_lower:
+            # Proper noun followed by lowercase word, ensure a space is added
+            corrected_text.append(token.text + " ")
+            changes.append(f"Ensured space after proper noun: {token.text}")
         else:
             corrected_text.append(token.text_with_ws)
-            i += 1
+        i += 1
 
     return "".join(corrected_text), changes
 
+# Function to handle extra newlines between paragraphs
+def remove_extra_newlines(text):
+    # This regex looks for a line ending with a letter (uppercase or lowercase)
+    # followed by one or more newlines, and then another letter (uppercase or lowercase)
+    # at the beginning of the next line. It replaces the newlines with a single space.
+    text = re.sub(r'([a-zA-ZàâçéèêëîïôûùüÿñæœÀÂÇÉÈÊËÎÏÔÛÙÜŸÆŒ])\n+\s*\n+\s*([a-zA-ZàâçéèêëîïôûùüÿñæœÀÂÇÉÈÊËÎÏÔÛÙÜŸÆŒ])', r'\1 \2', text)
+    return text
+
 # Function to handle spaces between sentences ending with lowercase and starting with lowercase
 def merge_sentences(text):
-    text = re.sub(r'([a-zàâçéèêëîïôûùüÿñæœ,])\s*\n\s*([a-zàâçéèêëîïôûùüÿñæœ])', r'\1 \2', text)
+    # Prevent merging if the next word starts with an uppercase letter
+    text = re.sub(r'([a-zàâçéèêëîïôûùüÿñæœ,;])\s*\n\s*(?![A-Z])([a-zàâçéèêëîïôûùüÿñæœ])', r'\1 \2', text)
+    return text
+
+# Function to reduce space when a lowercase word ends a line and the next starts with a capital letter
+def fix_line_breaks_between_sentences(text):
+    # This regex looks for a lowercase word at the end of a line (no punctuation) 
+    # followed by a line break and a capital letter at the beginning of the next line.
+    text = re.sub(r'([a-zàâçéèêëîïôûùüÿñæœ])\s*\n\s*([A-Z])', r'\1 \2', text)
+    return text
+
+# New function to specifically correct common patterns and prevent incorrect merges
+def fix_common_patterns(text):
+    # Correct specific patterns like "peut-être", "Charlie pendant", "Liam se", etc.
+    corrections = {
+        r'peutêtre': 'peut-être',
+        r'Charliependant': 'Charlie pendant',
+        r'Alexiscontinue': 'Alexis continue',
+        r'Liamse': 'Liam se'  # Specific case you've encountered
+    }
+    
+    for pattern, replacement in corrections.items():
+        text = re.sub(pattern, replacement, text)
+    
     return text
 
 def process_directory(input_dir, output_dir, logs_dir):
@@ -145,8 +174,17 @@ def process_directory(input_dir, output_dir, logs_dir):
             corrected_text, space_changes = fix_paragraph_spaces(corrected_text)
             changes.extend(space_changes)
 
-            # Merge sentences where needed
+            # Remove extra newlines between paragraphs
+            corrected_text = remove_extra_newlines(corrected_text)
+
+            # Fix line breaks between sentences where appropriate
+            corrected_text = fix_line_breaks_between_sentences(corrected_text)
+
+            # Merge sentences where needed, preventing improper merges
             final_text = merge_sentences(corrected_text)
+
+            # Correct known problematic patterns
+            final_text = fix_common_patterns(final_text)
 
             with open(output_path, "w", encoding="utf-8") as file:
                 file.write(final_text)
@@ -165,9 +203,9 @@ def process_directory(input_dir, output_dir, logs_dir):
         logging.info(f"Processed {file_count} files")
 
 if __name__ == "__main__":
-    input_dir = os.path.join(base_dir, 'txt_processed/4-numbers_replaced')
-    output_dir = os.path.join(base_dir, 'txt_processed/5-line-fix')
-    logs_dir = os.path.join(output_dir, 'logs')
+    input_dir = os.path.join("../", 'txt_processed/4-numbers_replaced')
+    output_dir = os.path.join("../", 'txt_processed/5-line-fix')
+    log_dir = os.path.join(output_dir, "logs")
 
     process_directory(input_dir, output_dir, logs_dir)
     logging.info("Script completed")

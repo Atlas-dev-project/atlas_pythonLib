@@ -1,21 +1,20 @@
 #!/usr/bin/env python3
 import os
 import re
-import sys
 
 def split_into_chapters(text):
-    # Split the text by chapter markers
-    chapter_splits = re.split(r'(@@ .*? @@)', text, flags=re.DOTALL)
+    # Split the text by chapter markers, retaining the markers
+    chapter_splits = re.split(r'(@@.*?@@)', text, flags=re.DOTALL)
     chapters = []
 
-    # Ensure the split text includes titles and contents
-    if chapter_splits[0].strip() == '':
-        chapter_splits = chapter_splits[1:]
-
-    for i in range(0, len(chapter_splits), 2):
+    # We don't need to remove the first split part as we're retaining the full content with markers
+    # Iterate over the chapter splits and merge titles with their content
+    for i in range(1, len(chapter_splits), 2):
         chapter_title = chapter_splits[i].strip()
         chapter_content = chapter_splits[i + 1].strip() if (i + 1) < len(chapter_splits) else ''
-        chapters.append((chapter_title, chapter_content))
+        # Concatenate the title and content
+        formatted_chapter = f"{chapter_title}\n\n{chapter_content}"
+        chapters.append(formatted_chapter)
 
     return chapters
 
@@ -44,17 +43,12 @@ def process_text_file(input_file_path, output_directory, info_output_directory):
 
     chapters = split_into_chapters(text)
 
-    for index, (title, content) in enumerate(chapters):
-        # Use the index as the chapter number instead of extracting it from the title
-        chapter_number = str(index + 1)
-        output_file_name = f"Chapitre_{chapter_number}.txt"
+    for index, chapter in enumerate(chapters):
+        output_file_name = f"Chapitre_{index + 1}.txt"  # Keep the original file naming format
         output_file_path = os.path.join(output_directory, output_file_name)
         
-        # Format the content with the chapter title starting at the beginning of the file
-        formatted_content = f"{title}\n\n{content}"
-
         with open(output_file_path, 'w', encoding='utf-8') as file:
-            file.write(formatted_content.strip())
+            file.write(chapter.strip())
         print(f"Processed file saved to: {output_file_path}")
 
 def process_directory(input_directory, output_directory, info_output_directory):
@@ -64,7 +58,7 @@ def process_directory(input_directory, output_directory, info_output_directory):
     if not os.path.exists(info_output_directory):
         os.makedirs(info_output_directory)
 
-    for file_name in os.listdir(input_directory):
+    for file_name in sorted(os.listdir(input_directory)):  # Sort files to process them in order
         if file_name.endswith('.txt'):
             input_file_path = os.path.join(input_directory, file_name)
             print(f"Processing {file_name}...")

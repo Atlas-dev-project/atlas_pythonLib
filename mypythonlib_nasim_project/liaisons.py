@@ -49,7 +49,8 @@ def identify_and_replace_liaisons(text):
         "né't": 0,
         "#@%": 0,
         "ils#@%": 0,
-        "elles#@%": 0
+        "elles#@%": 0,
+        "é't": 0  # Adding this entry to track the "é't" replacements
     }
 
     i = 0
@@ -73,6 +74,10 @@ def identify_and_replace_liaisons(text):
                 liaisons.append((token.text, next_token.text, word))
                 replacements["ét'une"] += 1
                 i += 1  
+            elif next_token.text[0] in 'aeiouhéà':
+                word = "é't"
+                liaisons.append((token.text, next_token.text, word))  # Add this to the liaisons list
+                replacements["é't"] += 1  # Count the replacement in the log
             else:
                 word = token.text
         elif token.text == "c'est":
@@ -90,6 +95,23 @@ def identify_and_replace_liaisons(text):
                 word = "cé't"
                 liaisons.append((token.text, next_token.text, word))
                 replacements["cé't"] += 1
+            else:
+                word = token.text
+        elif token.text == "s'est":
+            if next_token.text == "un":
+                word = "sét'un"
+                liaisons.append((token.text, next_token.text, word))
+                replacements["sét'un"] += 1
+                i += 1  # Skip next token
+            elif next_token.text == "une":
+                word = "sét'une"
+                liaisons.append((token.text, next_token.text, word))
+                replacements["sét'une"] += 1
+                i += 1  # Skip next token
+            elif next_token.text[0] in 'aeiouhéà':
+                word = "sé't"
+                liaisons.append((token.text, next_token.text, word))
+                replacements["sé't"] += 1
             else:
                 word = token.text
         elif token.text == "n'est":

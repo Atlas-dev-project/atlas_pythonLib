@@ -2,7 +2,6 @@
 import os
 import re
 import unicodedata
-import sys
 import collections
 
 # Function to highlight chapter titles
@@ -17,21 +16,16 @@ def highlight_titles(text, titles):
         # Normalize the title
         normalized_title = unicodedata.normalize('NFC', title)
 
-        # Split the title into chapter and title parts
-        parts = normalized_title.split(' ', 2)
-        chapter = ' '.join(parts[:2])
-        chapter_title = parts[2] if len(parts) > 2 else ''
+        # Replace spaces with a pattern that allows for line breaks, varying whitespace, and hyphens
+        flexible_title = re.escape(normalized_title).replace(r'\ ', r'[\s\-]*')
 
-        # Ensure the pattern matches the chapter title format with possible line breaks, varying whitespace, and optional punctuation
-        title_pattern = re.compile(r'(^' + re.escape(chapter) + r'[\s\S]*?' + re.escape(chapter_title) + r')', re.MULTILINE)
-        alt_title_pattern = re.compile(r'(^' + re.escape(chapter) + r'[\s\S]+?' + re.escape(chapter_title) + r')', re.MULTILINE)
+        # Create the regex pattern to match the title with possible line breaks and hyphens
+        title_pattern = re.compile(r'(^' + flexible_title + r')', re.MULTILINE | re.IGNORECASE)
 
         # Only mark the title if it hasn't been marked yet
         if normalized_title not in marked_titles:
             new_title = r'@@ \1 @@'
             normalized_text, count = title_pattern.subn(new_title, normalized_text, count=1)  # Mark only once
-            if count == 0:
-                normalized_text, count = alt_title_pattern.subn(new_title, normalized_text, count=1)  # Mark only once
             if count > 0:
                 log_entries.append(f"Added markers to title: {normalized_title}, Occurrences: {count}")
                 marked_titles.add(normalized_title)
@@ -40,18 +34,55 @@ def highlight_titles(text, titles):
 
     return normalized_text, log_entries
 
+# Function to merge chapter titles that span more than two lines
+def merge_split_titles(text):
+    log_entries = []
+    merged_text = []
+
+    # Split the text into lines for processing
+    lines = text.split('\n')
+    i = 0
+    while i < len(lines):
+        line = lines[i].strip()
+        
+        # Check if this line contains the start of a marked chapter title (with @@)
+        if line.startswith('@@') and i + 2 < len(lines):  # Ensure at least two more lines
+            next_line = lines[i + 1].strip()
+            third_line = lines[i + 2].strip()
+
+            # If the second line is not empty, check if the third line should be merged
+            if next_line and third_line and third_line.endswith('@@'):
+                # Merge the third line into the second line
+                lines[i + 1] = next_line + ' ' + third_line
+                log_entries.append(f"Merged third line into second for title starting with: {line}")
+                # Skip the third line since it was merged
+                i += 2
+            else:
+                merged_text.append(line)
+        else:
+            merged_text.append(line)
+
+        i += 1
+
+    # Re-join the text lines after processing
+    merged_text = '\n'.join(merged_text)
+
+    return merged_text, log_entries
+
 # Function to remove phrases at the start or end of paragraphs, even if split across lines
 def remove_phrase_at_paragraph_start_or_end(text, phrases):
     log_entries = []
 
     for phrase in phrases:
-        # Escape the phrase and handle potential line breaks or punctuation
+        if re.match(r'^\W*-\w+\W*$', phrase) or phrase.strip() == ',':
+            log_entries.append(f"Skipped removing phrase due to exception: {phrase}")
+            continue
+
         phrase_pattern = re.compile(r'(\n\s*' + re.escape(phrase.replace('\n', ' ')) + r'\s*\n)', re.IGNORECASE)
         start_pattern = re.compile(r'(^\s*' + re.escape(phrase.replace('\n', ' ')) + r'\s*$)', re.IGNORECASE)
         end_pattern = re.compile(r'(^\s*' + re.escape(phrase.replace('\n', ' ')) + r'\s*$)', re.IGNORECASE)
 
-        # Replace the phrases in the text
-        text, count = phrase_pattern.subn('\n\n', text)  # Add paragraph break after removal
+        text, count = phrase_pattern.subn('\n\n', text)
         text, start_count = start_pattern.subn('', text)
         text, end_count = end_pattern.subn('', text)
 
@@ -68,21 +99,18 @@ def remove_page_numbers(text):
     second_pass_removed = set()
     removed_numbers = collections.defaultdict(int)
 
-    # Pattern to match numbers at the end of paragraphs with no text before or after them
     number_pattern = re.compile(r'(\n\s*)(\d{1,5})(\s*\n)')
 
-    # First scan: Remove numbers at the end of paragraphs within the 0 to 10,000 range
     def first_pass_replace(match):
         number = int(match.group(2))
         if 0 <= number <= 10000 and (not first_pass_removed or number <= max(first_pass_removed) + 20):
             first_pass_removed.add(number)
             removed_numbers[number] += 1
-            return match.group(1) + '\n\n'  # Preserve paragraph break after removing the number
+            return match.group(1) + '\n\n'
         return match.group(0)
 
     cleaned_text = number_pattern.sub(first_pass_replace, text)
 
-    # Second scan: Remove remaining numbers within the first and last removed range
     if first_pass_removed:
         min_removed = min(first_pass_removed)
         max_removed = max(first_pass_removed)
@@ -92,12 +120,11 @@ def remove_page_numbers(text):
             if min_removed <= number <= max_removed and number not in first_pass_removed and number not in second_pass_removed:
                 second_pass_removed.add(number)
                 removed_numbers[number] += 1
-                return match.group(1) + '\n\n'  # Preserve paragraph break after removing the number
+                return match.group(1) + '\n\n'
             return match.group(0)
 
         cleaned_text = number_pattern.sub(second_pass_replace, cleaned_text)
 
-    # Log all removed numbers and their counts
     for number, count in removed_numbers.items():
         log_entries.append(f"Removed page number: {number} (removed {count} time(s)).")
 
@@ -105,72 +132,51 @@ def remove_page_numbers(text):
 
 # Function to identify and remove recurring patterns
 def identify_and_remove_recurring_patterns(text, log_entries):
-    # Split text into paragraphs
     paragraphs = [para.strip() for para in re.split(r'\n{2,}', text) if para.strip()]
 
-    # Debug: Print the number of paragraphs and sample paragraphs
-    print(f"Number of paragraphs: {len(paragraphs)}")
-    for i, para in enumerate(paragraphs[:5]):  # Print first 5 paragraphs
-        print(f"Paragraph {i+1}: {para[:100]}...")  # Print first 100 characters
-
-    # Find recurring phrases
     def find_recurring_phrases(paragraphs):
-        text_combined = '\n'.join(paragraphs)
-        counts = collections.Counter(text_combined.split('\n'))
-        recurring_phrases = {phrase for phrase, count in counts.items() if count >= 8}
-        
-        # Debug: Print found recurring phrases
-        print(f"Found recurring phrases: {recurring_phrases}")
+        phrase_counts = collections.defaultdict(int)
+        for para in paragraphs:
+            first_line = para.splitlines()[0].strip()
+            if first_line:
+                phrase_counts[first_line] += 1
+
+            last_line = para.splitlines()[-1].strip()
+            if last_line:
+                phrase_counts[last_line] += 1
+
+        recurring_phrases = {phrase for phrase, count in phrase_counts.items() if count >= 8}
         return recurring_phrases
 
     recurring_phrases = find_recurring_phrases(paragraphs)
 
-    # Debug: Print the recurring phrases that will be removed
-    print(f"Recurring phrases to be removed: {recurring_phrases}")
-
-    # Regex patterns to handle different cases
     for phrase in recurring_phrases:
-        # Log the identified recurring phrase
+        if re.match(r'^\W*-\w+\W*$', phrase) or phrase.strip() == ',':
+            log_entries.append(f"Skipped removing recurring phrase due to exception: {phrase}")
+            continue
+
+        if phrase.strip().upper() == '':
+            log_entries.append(f"Skipped removing recurring phrase due to exception: {phrase}")
+            continue
+
         log_entries.append(f"Identified recurring phrase: {phrase}")
-        
-        # Handle standalone page numbers
-        if re.match(r'^\d+$', phrase):
+
+        if re.match(r'^\d+$', phrase) or "mep_enleve_la_nuit.indd" in phrase:
             pattern = rf'(?<=\n)\s*{re.escape(phrase)}\s*(?=\n)|^\s*{re.escape(phrase)}\s*(?=\n|$)'
         else:
-            # Create regex pattern to match the phrase at the beginning or end of paragraphs
             pattern = rf'(?<=\n)\s*{re.escape(phrase)}\s*(?=\n)|^\s*{re.escape(phrase)}\s*(?=\n|$)'
-        
-        # Debug: Print the regex pattern
-        print(f"Regex pattern: {pattern}")
-        
-        # Remove the recurring phrase from the text and count the number of removals
+
         text, count = re.subn(pattern, '', text, flags=re.MULTILINE)
-        
-        # Log the removal of the phrase and how many times it was removed
+
         if count > 0:
             log_entries.append(f"Removed recurring phrase: {phrase}, Occurrences: {count}")
 
+    mep_pattern = re.compile(r'mep_enleve_la_nuit\.indd\s*\d+', re.IGNORECASE)
+    text, mep_count = mep_pattern.subn('', text)
+    if mep_count > 0:
+        log_entries.append(f"Removed 'mep_enleve_la_nuit.indd' occurrences: {mep_count}")
+
     return text
-
-# Example usage
-log_entries = []
-sample_text = """Your sample text here"""
-processed_text = identify_and_remove_recurring_patterns(sample_text, log_entries)
-
-# Print log entries for review
-print("\nLog entries:")
-for entry in log_entries:
-    print(entry)
-
-# Function to remove standalone periods or lines with only dots
-def remove_standalone_dots(text):
-    log_entries = []
-    # Pattern to match standalone periods or lines with multiple dots with no other text
-    dot_pattern = re.compile(r'^\s*(\.\s*)+$', re.MULTILINE)
-    cleaned_text, count = dot_pattern.subn('', text)
-    if count > 0:
-        log_entries.append(f"Removed {count} lines with standalone periods or dots.")
-    return cleaned_text, log_entries
 
 # Function to process a single text file
 def process_text_file(input_file_path, output_file_path, log_file_path, phrases, titles):
@@ -186,17 +192,17 @@ def process_text_file(input_file_path, output_file_path, log_file_path, phrases,
     highlighted_text, title_log_entries = highlight_titles(text, titles)
     log_entries.extend(title_log_entries)
 
+    # Merge chapter titles split across more than two lines
+    merged_text, merge_log_entries = merge_split_titles(highlighted_text)
+    log_entries.extend(merge_log_entries)
+
     # Remove phrases at the start or end of paragraphs
-    cleaned_text, phrase_log_entries = remove_phrase_at_paragraph_start_or_end(highlighted_text, phrases)
+    cleaned_text, phrase_log_entries = remove_phrase_at_paragraph_start_or_end(merged_text, phrases)
     log_entries.extend(phrase_log_entries)
 
     # Remove page numbers based on the specified rules
     cleaned_text, number_log_entries = remove_page_numbers(cleaned_text)
     log_entries.extend(number_log_entries)
-
-    # Remove standalone periods or lines with only dots
-    cleaned_text, dot_log_entries = remove_standalone_dots(cleaned_text)
-    log_entries.extend(dot_log_entries)
 
     with open(output_file_path, 'w', encoding='utf-8') as file:
         file.write(cleaned_text)
@@ -229,10 +235,34 @@ if __name__ == "__main__":
     
     # Define the phrases and titles
     phrases = [
-        "fdsfd"
+        # Add your specific phrases here
     ]
+
     titles = [
-        "Chapitre 1"
+    "Introduction",
+    "chapitre 1 L’attachement premier et le sentiment de sécurité",
+    "1.2 Les besoins narcissiques et les premières communications",
+    "2 Les manifestations et les conséquences de l’abandon",
+    "2.2 Les frustrations et l’humeur triste",
+    "2.3 L’angoisse d’abandon de l’enfant adopté",
+    "2.4 La déprime des enfants et des adolescents",
+    "2.5 Le préjugé envers les petits garçons",
+    "2.6 Le déficit d’attention et l’hyperactivité",
+    "2.7 Le besoin de présence des enfants et l’individualisme des adultes",
+    "chapitre 3 Les apprentissages thérapeutiques et réparateurs",
+    "3.2 Le thérapeute, objet de transition et de transfert",
+    "3.3 La thérapie corrective avec les enfants",
+    "3.4 La thérapie à l’âge de la puberté",
+    "chapitre 4 Les apprentissages créatifs et régénérateurs",
+    "4.2 La thérapie par le rêve et la thérapie par l’écriture",
+    "4.3 Le langage de la création et de l’artiste",
+    "4.4 Les langages de l’émotion et l’intelligence du corps",
+    "4.5 L’environnement non humain",
+    "Conclusion",
+    "Glossaire",
+    "Bibliographie",
+    "Note de l’auteure"
+
     ]
 
     process_directory(input_directory, output_directory, log_directory, phrases, titles)
