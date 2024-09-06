@@ -14,7 +14,7 @@ txt_processed_directory = os.path.join(parent_dir, "txt_processed")
 
 # List of subdirectories relative to the txt_processed directory
 subdirectories = [
-    "0-main_txt",
+    # "0-main_txt",
     "1-page_nb_cln",
     "2-chapter_split",
     "3-paragraph_fix",
@@ -29,7 +29,7 @@ subdirectories = [
 
 # List of Python scripts to run
 script_paths = [
-    "pdf_2_txt.py",
+    # "pdf_2_txt.py",
     "remove_pnum_hilight_title.py",
     "split_chapters.py",
     "clean_text.py",

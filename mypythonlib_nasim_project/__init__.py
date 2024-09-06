@@ -1,5 +1,5 @@
 
-from .main import mainFunc
+from .main import main
 __all__ = [
-   mainFunc  
+   main  
 ]

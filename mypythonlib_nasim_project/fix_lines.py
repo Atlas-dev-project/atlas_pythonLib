@@ -3,6 +3,7 @@ import os
 import re
 import spacy
 import logging
+from config import base_dir  # Import the base directory
 
 # Set up logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s %(levelname)s %(message)s')
@@ -15,8 +16,8 @@ except Exception as e:
     raise
 
 # Define the input and output directories
-input_dir = os.path.join("../", 'txt_processed/4-numbers_replaced')
-output_dir = os.path.join("../", 'txt_processed/5-line-fix')
+input_dir = os.path.join(base_dir, 'txt_processed/4-numbers_replaced')
+output_dir = os.path.join(base_dir, 'txt_processed/5-line-fix')
 logs_dir = os.path.join(output_dir, 'logs')
 
 if not os.path.exists(output_dir):
@@ -158,8 +159,8 @@ def process_directory(input_dir, output_dir, logs_dir):
         logging.info(f"Processed {file_count} files")
 
 if __name__ == "__main__":
-    input_dir = os.path.join("../", 'txt_processed/4-numbers_replaced')
-    output_dir = os.path.join("../", 'txt_processed/5-line-fix')
+    input_dir = os.path.join(base_dir, 'txt_processed/4-numbers_replaced')
+    output_dir = os.path.join(base_dir, 'txt_processed/5-line-fix')
     logs_dir = os.path.join(output_dir, 'logs')
 
     process_directory(input_dir, output_dir, logs_dir)

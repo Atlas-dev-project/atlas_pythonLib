@@ -1,7 +1,5 @@
 venv/
 dist/
 build/
-txt_processed/
 mypythonlib_nasim_project.egg-info/
-requirements.txt
-run_processor.sh
+test_spacy/
