@@ -239,30 +239,29 @@ if __name__ == "__main__":
     ]
 
     titles = [
-    "Introduction",
-    "chapitre 1 L’attachement premier et le sentiment de sécurité",
-    "1.2 Les besoins narcissiques et les premières communications",
-    "2 Les manifestations et les conséquences de l’abandon",
-    "2.2 Les frustrations et l’humeur triste",
-    "2.3 L’angoisse d’abandon de l’enfant adopté",
-    "2.4 La déprime des enfants et des adolescents",
-    "2.5 Le préjugé envers les petits garçons",
-    "2.6 Le déficit d’attention et l’hyperactivité",
-    "2.7 Le besoin de présence des enfants et l’individualisme des adultes",
-    "chapitre 3 Les apprentissages thérapeutiques et réparateurs",
-    "3.2 Le thérapeute, objet de transition et de transfert",
-    "3.3 La thérapie corrective avec les enfants",
-    "3.4 La thérapie à l’âge de la puberté",
-    "chapitre 4 Les apprentissages créatifs et régénérateurs",
-    "4.2 La thérapie par le rêve et la thérapie par l’écriture",
-    "4.3 Le langage de la création et de l’artiste",
-    "4.4 Les langages de l’émotion et l’intelligence du corps",
-    "4.5 L’environnement non humain",
-    "Conclusion",
-    "Glossaire",
-    "Bibliographie",
-    "Note de l’auteure"
-
+    # "Introduction",
+    # "chapitre 1 L’attachement premier et le sentiment de sécurité",
+    # "1.2 Les besoins narcissiques et les premières communications",
+    # "2 Les manifestations et les conséquences de l’abandon",
+    # "2.2 Les frustrations et l’humeur triste",
+    # "2.3 L’angoisse d’abandon de l’enfant adopté",
+    # "2.4 La déprime des enfants et des adolescents",
+    # "2.5 Le préjugé envers les petits garçons",
+    # "2.6 Le déficit d’attention et l’hyperactivité",
+    # "2.7 Le besoin de présence des enfants et l’individualisme des adultes",
+    # "chapitre 3 Les apprentissages thérapeutiques et réparateurs",
+    # "3.2 Le thérapeute, objet de transition et de transfert",
+    # "3.3 La thérapie corrective avec les enfants",
+    # "3.4 La thérapie à l’âge de la puberté",
+    # "chapitre 4 Les apprentissages créatifs et régénérateurs",
+    # "4.2 La thérapie par le rêve et la thérapie par l’écriture",
+    # "4.3 Le langage de la création et de l’artiste",
+    # "4.4 Les langages de l’émotion et l’intelligence du corps",
+    # "4.5 L’environnement non humain",
+    # "Conclusion",
+    # "Glossaire",
+    # "Bibliographie",
+    # "Note de l’auteure"
     ]
 
     process_directory(input_directory, output_directory, log_directory, phrases, titles)
