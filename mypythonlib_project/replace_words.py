@@ -8,7 +8,7 @@ import glob
 base_dir = os.path.dirname(os.path.abspath(__file__))
 
 # Path to the JSON file (one level up from mypythonlib_nasim_project)
-json_file = os.path.join("./", 'words_dictionary.json')
+json_file = os.path.join("../", 'words_dictionary.json')
 
 # Path to the txt_processed directory (two levels up from the current script)
 # txt_processed_dir = os.path.join(os.path.dirname(os.path.dirname(base_dir)), 'txt_processed')
