@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import spacy
 import os
-import datetime
+import logging
 
 # Load the French language model in SpaCy
 nlp = spacy.load("fr_core_news_lg")
@@ -23,7 +23,7 @@ exceptions_s = {
     "ne", "je", "me", "te", "se", "que", "ce", "pas", "sur", "sous", "dans", "chez",
     "ici", "oui", "or", "où", "leur", "tout", "bien", "fort", "sauf",
     "au", "aux", "allait", "avait", "aussi", "ai", "ait", "sais", "vois",
-    "il", "elle", "on", "vis", "dis", "pis", "lis", "mis","ris", "lis",
+    "il", "elle", "on", "vis", "dis", "pis", "lis", "mis", "ris", "lis",
     "un", "une", "après", "autrement", "autrefois", "avec", "ont", "avaient",
     "entra", "ha", "hé", "hi", "ho", "hu",
     "les", "des", "mes", "ses", "ces", "tes", "nos", "vos", "leurs", "nous", "vous",
@@ -158,32 +158,69 @@ def identify_and_replace_liaisons(text):
 
     return liaisons, ''.join(modified_tokens), replacements
 
-# Process each file
-for filename in os.listdir(input_dir):
-    if filename.endswith(".txt"):
-        file_path = os.path.join(input_dir, filename)
-        try:
-            with open(file_path, 'r', encoding='utf-8') as file:
-                text = file.read()
-            
-            # Identify and replace liaisons in the text
-            liaisons, modified_text, replacements = identify_and_replace_liaisons(text)
-            
-            # Create a log for the file
-            log_file_path = os.path.join(log_dir, f"{filename}_log.txt")
-            with open(log_file_path, 'w', encoding='utf-8') as log_file:
-                log_file.write(f"File: {filename}\n\n")
-                for liaison in liaisons:
-                    log_file.write(f"{liaison[0]} - {liaison[1]} replaced by {liaison[2]}\n")
-                log_file.write("\nReplacement counts:\n")
-                for key, value in replacements.items():
-                    log_file.write(f"{key}: {value}\n")
+# Modified function to process text files in a directory and subdirectories
+def process_directory(input_dir, output_dir, log_dir):
+    file_count = 0
+    for root, dirs, files in os.walk(input_dir):
+        # Exclude any folders that contain 'log', 'logs', etc. in their name
+        dirs[:] = [d for d in dirs if 'log' not in d.lower()]
 
-            # Write the modified text to output file
-            output_file_path = os.path.join(output_dir, filename)
-            with open(output_file_path, 'w', encoding='utf-8') as file:
-                file.write(modified_text)
-        except Exception as e:
-            error_log_path = os.path.join(log_dir, f"{filename}_error_log.txt")
-            with open(error_log_path, 'w', encoding='utf-8') as error_log:
-                error_log.write(f"Error processing file: {filename}\n")
+        # Process files in the current directory
+        for filename in files:
+            if filename.endswith(".txt"):
+                input_path = os.path.join(root, filename)
+
+                # Check if the file is in a subfolder
+                if root != input_dir:
+                    # Create corresponding subfolder in the output directory
+                    relative_subfolder = os.path.relpath(root, input_dir)
+                    output_subfolder = os.path.join(output_dir, relative_subfolder)
+                    log_subfolder = os.path.join(output_subfolder, 'logs')
+
+                    if not os.path.exists(output_subfolder):
+                        os.makedirs(output_subfolder)
+
+                    if not os.path.exists(log_subfolder):
+                        os.makedirs(log_subfolder)
+
+                    output_path = os.path.join(output_subfolder, filename)
+                    log_file_path = os.path.join(log_subfolder, f"{os.path.splitext(filename)[0]}_log.txt")
+                else:
+                    # Process files in the main input directory
+                    output_path = os.path.join(output_dir, filename)
+                    log_file_path = os.path.join(log_dir, f"{os.path.splitext(filename)[0]}_log.txt")
+
+                try:
+                    with open(input_path, 'r', encoding='utf-8') as file:
+                        text = file.read()
+
+                    # Identify and replace liaisons in the text
+                    liaisons, modified_text, replacements = identify_and_replace_liaisons(text)
+
+                    # Create a log for the file
+                    with open(log_file_path, 'w', encoding='utf-8') as log_file:
+                        log_file.write(f"File: {filename}\n\n")
+                        for liaison in liaisons:
+                            log_file.write(f"{liaison[0]} - {liaison[1]} replaced by {liaison[2]}\n")
+                        log_file.write("\nReplacement counts:\n")
+                        for key, value in replacements.items():
+                            log_file.write(f"{key}: {value}\n")
+
+                    # Write the modified text to the output file
+                    with open(output_path, 'w', encoding='utf-8') as file:
+                        file.write(modified_text)
+
+                    file_count += 1
+                except Exception as e:
+                    error_log_path = os.path.join(log_dir, f"{filename}_error_log.txt")
+                    with open(error_log_path, 'w', encoding='utf-8') as error_log:
+                        error_log.write(f"Error processing file: {filename}\n{str(e)}\n")
+
+    if file_count == 0:
+        logging.warning(f"No text files found in the input directory: {input_dir}")
+    else:
+        logging.info(f"Processed {file_count} files")
+
+if __name__ == "__main__":
+    process_directory(input_dir, output_dir, log_dir)
+    logging.info("Script completed")

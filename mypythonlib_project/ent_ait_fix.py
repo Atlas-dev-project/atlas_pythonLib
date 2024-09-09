@@ -11,7 +11,7 @@ log_dir = os.path.join(output_dir, "logs")
 nlp = spacy.load("fr_core_news_lg")
 
 # List of exception words
-exception_words = ['laser', 'ressent', 'sister', 'insolent', 'content', 'absent']  # Add more words as needed
+exception_words = ['laser', 'ressent', 'sister', 'insolent', 'content', 'vincent', 'absent', 'Laurent', 'Clement', 'Serpent', 'Advent', 'Ardent', 'baker', 'painter', 'runner', 'leader', 'writer', 'dancer', 'speaker', 'teacher']  # Add more words as needed
 
 # Ensure output and log directories exist
 if not os.path.exists(output_dir):
@@ -108,11 +108,45 @@ def process_file(file_path, output_path, log_path):
         for original, new in ent_replaced_words:
             log_file.write(f"Replaced '{original}' with '{new}'\n")
 
-for filename in os.listdir(input_dir):
-    if filename.endswith('.txt'):
-        input_path = os.path.join(input_dir, filename)
-        output_path = os.path.join(output_dir, filename)
-        log_path = os.path.join(log_dir, f"{os.path.splitext(filename)[0]}_log.txt")
-        process_file(input_path, output_path, log_path)
+# Modified function to process text files in a directory and subdirectories
+def process_directory(input_dir, output_dir, log_dir):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
 
-print("Processing complete.")
+    # Walk through the directory and subdirectories
+    for root, dirs, files in os.walk(input_dir):
+        # Exclude any folders that contain 'log', 'logs', etc. in their name
+        dirs[:] = [d for d in dirs if 'log' not in d.lower()]
+
+        # Process files in the current directory
+        for filename in files:
+            if filename.endswith('.txt'):
+                input_path = os.path.join(root, filename)
+
+                # Check if the file is in a subfolder
+                if root != input_dir:
+                    # Create corresponding subfolder in the output directory
+                    relative_subfolder = os.path.relpath(root, input_dir)
+                    output_subfolder = os.path.join(output_dir, relative_subfolder)
+                    log_subfolder = os.path.join(output_subfolder, 'logs')
+
+                    if not os.path.exists(output_subfolder):
+                        os.makedirs(output_subfolder)
+
+                    if not os.path.exists(log_subfolder):
+                        os.makedirs(log_subfolder)
+
+                    output_path = os.path.join(output_subfolder, filename)
+                    log_path = os.path.join(log_subfolder, f"{os.path.splitext(filename)[0]}_log.txt")
+                else:
+                    # Process files in the main input directory
+                    output_path = os.path.join(output_dir, filename)
+                    log_path = os.path.join(log_dir, f"{os.path.splitext(filename)[0]}_log.txt")
+
+                process_file(input_path, output_path, log_path)
+
+if __name__ == "__main__":
+    process_directory(input_dir, output_dir, log_dir)
+    print("Processing complete.")

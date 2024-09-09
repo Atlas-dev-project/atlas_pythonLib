@@ -3,6 +3,7 @@ import subprocess
 import time
 import logging
 import sys
+import shutil
 
 # Add the base directory to the PYTHONPATH
 base_dir = os.path.dirname(os.path.abspath(__file__))
@@ -30,6 +31,7 @@ subdirectories = [
 # List of Python scripts to run
 script_paths = [
     #"pdf_2_txt.py",
+    "argument.py",
     "remove_pnum_hilight_title.py",
     "split_chapters.py",
     "clean_text.py",
@@ -73,6 +75,25 @@ def delete_txt_files_in_subdirectories(base_directory, subdirectories):
                             logging.info(f"Deleted file: {file_path}")
                         except Exception as e:
                             logging.error(f"Error deleting file {file_path}: {e}")
+        else:
+            logging.warning(f"Directory does not exist: {full_path}")
+
+# Function to delete subfolders in the subdirectories (except those containing logs)
+def delete_subfolders_in_subdirectories(base_directory, subdirectories):
+    for subdir in subdirectories:
+        full_path = os.path.join(base_directory, subdir)
+        logging.debug(f"Deleting subfolders in: {full_path}")
+        if os.path.exists(full_path):
+            for root, dirs, files in os.walk(full_path):
+                # Skip folders that contain 'log' in their name
+                dirs[:] = [d for d in dirs if 'log' not in d.lower()]
+                for dir_name in dirs:
+                    dir_path = os.path.join(root, dir_name)
+                    try:
+                        shutil.rmtree(dir_path)
+                        logging.info(f"Deleted folder: {dir_path}")
+                    except Exception as e:
+                        logging.error(f"Error deleting folder {dir_path}: {e}")
         else:
             logging.warning(f"Directory does not exist: {full_path}")
 
@@ -126,6 +147,9 @@ def main():
 
     # Delete .txt files in the specified subdirectories
     delete_txt_files_in_subdirectories(txt_processed_directory, subdirectories)
+
+    # Delete subfolders in the specified subdirectories (excluding log folders)
+    delete_subfolders_in_subdirectories(txt_processed_directory, subdirectories)
 
     # Update shebangs in all scripts
     update_all_shebangs(script_paths_abs)

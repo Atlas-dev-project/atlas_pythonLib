@@ -2,7 +2,7 @@
 import os
 import re
 import spacy
-from ebooklib import epub  # For creating EPUB files
+from config import output_directory  # Importing the output_directory from config.py
 
 # Load SpaCy French large model
 nlp = spacy.load('fr_core_news_lg')
@@ -21,14 +21,7 @@ def extract_and_replace_names(text):
     exception_names = [
         "Boris", "Paris", "Doris", "Elvis", "Curtis", "Travis", "Chris", "Dennis", "Francis", "Lewis", "Mars", "Julieet", 
         "Sébas", "Sergent", "Otis", "Phyllis", "Harris", "Morris", "Ennis", "Amaris", "Claris", "Wallis", "Jamis", "Yanis",
-        "Loris", "Ellis", "Anis", "Idris", "Euris", "Mavis", "Norris", "Tavis", "Maris", "Candis", "Jadis", "Farris", 
-        "Ferris", "Avis", "Alis", "Eddis", "Iris", "Janis", "Jarvis", "Karis", "Ladis", "Vas-y fort", "Genesis", "Nelis", 
-        "Bris", "Chrys", "Daris", "Elis", "Eris", "Hollis", "Kelis", "Thais", "Nokomis", "Vallis", "Aulis", "Aris", 
-        "Clematis", "Clovis", "Damaris", "Ignis", "Rufus", "Silas", "Vas", "Windigos", "Assis", "Achilles", "Cris", 
-        "Iris", "Myrtis", "Narcis", "Peris", "Tallis", "Yanis", "Siris", "Annis", "Chris", "Davis", "Bigfoot", "Bigfoots", 
-        "Ward", "Métis", "Ma mère", "Vas-y", "Cheerios", "La Fleur aux dent", "Chavez", "Perez", "Gomez", "Martinez", 
-        "Vazquez", "Cortez", "Hernandez", "Juarez", "Lopez", "Mez", "Lucas", "Jonas", "Thomas", "Nicholas", "Elias", 
-        "Tobias", "Zacharias", "Silas", "Pascal", "Mathias"
+        # Add more exceptions as needed
     ]
 
     names = [ent.text for ent in doc.ents if ent.label_ == 'PER']
@@ -57,20 +50,12 @@ def extract_and_replace_names(text):
 
     return text, log
 
-# Function to clean text (removing extra spaces, tabs, and control characters after punctuation)
+# Function to clean text (preserving paragraph spacing)
 def clean_text(text):
-    # Remove trailing spaces at the end of each line without merging paragraphs
-    text = re.sub(r'[ \t]+$', '', text, flags=re.MULTILINE)
-
-    # Remove non-standard characters (tabs, newlines, control characters like \x07)
-    text = re.sub(r'[\t\x07]', '', text)  # Explicitly remove any tabs or control characters
-
-    # Remove any extra spaces after punctuation like ".", "!", "?" or after numbers
-    text = re.sub(r'([.!?:])\s*\n\s+', r'\1\n', text)  # Ensure punctuation stays on the correct line
-
-    # Remove unnecessary spaces between lines and words
-    text = re.sub(r'[ \t]+(?=\n)', '', text)  # Remove any spaces before a new line
-
+    # Preserve paragraph spacing by keeping double newlines
+    text = re.sub(r'([.!?:])\s*\n\s*', r'\1\n\n', text)  # Ensure punctuation stays on the correct line and preserve spacing
+    text = re.sub(r'[ \t]+$', '', text, flags=re.MULTILINE)  # Remove trailing spaces
+    text = re.sub(r'[\t\x07]', '', text)  # Remove tabs and control characters
     return text
 
 # Function to process text files and log replacements
@@ -88,45 +73,70 @@ def process_text_file(input_file_path, output_file_path, log_file_path, word_cou
     with open(output_file_path, 'w', encoding='utf-8') as file:
         file.write(cleaned_text)
 
-    # Log the name replacements
-    with open(log_file_path, 'w', encoding='utf-8') as log_file:
-        for original, replacement in replacements_log.items():
-            log_file.write(f"{original}: {replacement}\n")
+    # Log the name replacements - #bypass: To skip logging replacements, comment out this section
+    #with open(log_file_path, 'w', encoding='utf-8') as log_file:
+     #   for original, replacement in replacements_log.items():
+      #      log_file.write(f"{original}: {replacement}\n")  # This logs each replacement
 
     # Count words and add to the total word count
     word_count += len(cleaned_text.split())
     return word_count
 
+# Function to process text files in a directory and subdirectories
+def process_directory(input_dir, output_dir, log_dir):
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    if not os.path.exists(log_dir):
+        os.makedirs(log_dir)
+
+    # Initialize total word count for each folder
+    folder_word_count = {}
+
+    # Walk through the input directory and subdirectories
+    for root, dirs, files in os.walk(input_dir):
+        # Exclude any folders that contain 'log', 'logs', etc. in their name
+        dirs[:] = [d for d in dirs if 'log' not in d.lower()]
+
+        # Process each .txt file in the current directory
+        for file_name in files:
+            if file_name.endswith('.txt'):
+                input_file_path = os.path.join(root, file_name)
+
+                # Determine output folder and log folder
+                if root != input_dir:
+                    relative_subfolder = os.path.relpath(root, input_dir)
+                    output_subfolder = os.path.join(output_dir, relative_subfolder)
+
+                    if not os.path.exists(output_subfolder):
+                        os.makedirs(output_subfolder)
+
+                    log_subfolder = os.path.join(output_subfolder, 'logs')
+                    if not os.path.exists(log_subfolder):
+                        os.makedirs(log_subfolder)
+
+                    output_file_path = os.path.join(output_subfolder, file_name)
+                    log_file_path = os.path.join(log_subfolder, f"log_{file_name}")
+                    word_count_log_path = os.path.join(log_subfolder, "word_count.txt")
+                else:
+                    output_file_path = os.path.join(output_dir, file_name)
+                    log_file_path = os.path.join(log_dir, f"log_{file_name}")
+                    word_count_log_path = os.path.join(log_dir, "word_count.txt")
+
+                # Initialize folder-specific word count if not present
+                if word_count_log_path not in folder_word_count:
+                    folder_word_count[word_count_log_path] = 0
+
+                # Process the file and update folder-specific word count
+                folder_word_count[word_count_log_path] += process_text_file(input_file_path, output_file_path, log_file_path, 0)
+
+    # Log word count for each folder - #bypass: To skip logging word count, comment out this section
+   # for word_count_log_path, total_word_count in folder_word_count.items():
+    #    with open(word_count_log_path, 'w', encoding='utf-8') as wc_file:
+     #       wc_file.write(f"Total word count for this folder: {total_word_count}\n")  # Logs total word count
+
 if __name__ == "__main__":
     input_directory = os.path.join("../", "txt_processed/8-s_back_")
-    output_directory = os.path.join("../", "txt_processed/9-names_correction")
     log_directory = os.path.join(output_directory, 'logs_')
 
-    os.makedirs(output_directory, exist_ok=True)
-    os.makedirs(log_directory, exist_ok=True)
-
-    total_word_count = 0
-
-    for file_name in os.listdir(input_directory):
-        if file_name.endswith('.txt'):
-            input_file_path = os.path.join(input_directory, file_name)
-            output_file_path = os.path.join(output_directory, file_name)
-            log_file_name = f"log_{file_name}"
-            log_file_path = os.path.join(log_directory, log_file_name)
-
-            print(f"Processing {file_name}...")
-            total_word_count = process_text_file(input_file_path, output_file_path, log_file_path, total_word_count)
-            print(f"Processed file saved as {file_name}")
-            print(f"Log saved as {log_file_name}")
-
-    # Save total word count to num_words.txt
-    num_words_file_path = os.path.join(log_directory, 'num_words.txt')
-    with open(num_words_file_path, 'w', encoding='utf-8') as num_words_file:
-        num_words_file.write(f"Total word count: {total_word_count}\n")
-
-    print(f"Total word count: {total_word_count}")
-
-    # Generate the EPUB3 file
-    #generate_epub(output_directory, log_directory)
-
+    process_directory(input_directory, output_directory, log_directory)
     print("Script completed")

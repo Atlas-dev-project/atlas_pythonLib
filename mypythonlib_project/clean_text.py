@@ -45,18 +45,39 @@ def process_text_file(input_file_path, output_file_path):
     with open(output_file_path, 'w', encoding='utf-8') as file:
         file.write(cleaned_text)
 
+# Modified function to process all text files in a directory and its subdirectories
 def process_directory(input_directory, output_directory):
     if not os.path.exists(output_directory):
         os.makedirs(output_directory)
 
-    for file_name in os.listdir(input_directory):
-        if file_name.endswith('.txt'):
-            input_file_path = os.path.join(input_directory, file_name)
-            output_file_path = os.path.join(output_directory, file_name)
+    # Walk through the directory and subdirectories
+    for root, dirs, files in os.walk(input_directory):
+        # Exclude any folders that contain 'log', 'logs', etc. in their name
+        dirs[:] = [d for d in dirs if 'log' not in d.lower()]
 
-            print(f"Processing {file_name}...")
-            process_text_file(input_file_path, output_file_path)
-            print(f"Processed file saved as {output_file_path}")
+        # Process files in the current directory
+        for file_name in files:
+            if file_name.endswith('.txt'):
+                input_file_path = os.path.join(root, file_name)
+
+                # Check if the file is in a subfolder
+                if root != input_directory:
+                    # Create corresponding subfolder in the output directory
+                    relative_subfolder = os.path.relpath(root, input_directory)
+                    output_subfolder = os.path.join(output_directory, relative_subfolder)
+
+                    if not os.path.exists(output_subfolder):
+                        os.makedirs(output_subfolder)
+
+                    output_file_path = os.path.join(output_subfolder, file_name)
+                else:
+                    # Process files in the main input directory
+                    output_file_path = os.path.join(output_directory, file_name)
+
+                # Process the file as usual
+                print(f"Processing {file_name} from {root}...")
+                process_text_file(input_file_path, output_file_path)
+                print(f"Processed file saved as {output_file_path}")
 
 if __name__ == "__main__":
     input_directory = os.path.join("../", 'txt_processed/2-chapter_split')

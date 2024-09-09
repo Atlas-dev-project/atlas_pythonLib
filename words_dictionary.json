@@ -5,8 +5,8 @@
         "à l'est": "à l'este",
         "est ce qu'elle": "è'ce qu'elle",
         "est ce qu'il": "è'ce qu'il",
-        "est ce qu'elle": "è'ce qu'elles",
-        "est ce qu'il": "è'ce qu'ils",
+        "est ce qu'elle": "è'ce qu'elle",
+        "est ce qu'il": "è'ce qu'il",
         "est-ce qu'elle": "è'ce qu'elle",
         "est-ce qu'il": "è'ce qu'il",
         "est-ce qu'elle": "è'ce qu'elles",
@@ -17720,7 +17720,6 @@
     "II": "deux",
     "III": "troi",
     "IV": "quatre",
-    "VI": "six",
     "VII": "sept",
     "VIII": "huit",
     "IX": "neuf",
@@ -17988,5 +17987,6 @@
     "vontil": "vont-il",
     "vontils": "vont-il",
     "pis": "pi",
-    "premier": "premiers"
+    "premier": "premiers",
+    "est" : "es"
 }

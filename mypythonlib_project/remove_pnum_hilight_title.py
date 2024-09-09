@@ -34,7 +34,7 @@ def highlight_titles(text, titles):
 
     return normalized_text, log_entries
 
-# Function to merge chapter titles that span more than two lines
+# Corrected function to merge chapter titles that span more than two lines
 def merge_split_titles(text):
     log_entries = []
     merged_text = []
@@ -50,9 +50,9 @@ def merge_split_titles(text):
             next_line = lines[i + 1].strip()
             third_line = lines[i + 2].strip()
 
-            # If the second line is not empty, check if the third line should be merged
+            # If the second and third lines belong to the chapter title, merge them
             if next_line and third_line and third_line.endswith('@@'):
-                # Merge the third line into the second line
+                # Merge the third line into the second line, and append it to the current line
                 lines[i + 1] = next_line + ' ' + third_line
                 log_entries.append(f"Merged third line into second for title starting with: {line}")
                 # Skip the third line since it was merged
@@ -176,17 +176,18 @@ def identify_and_remove_recurring_patterns(text, log_entries):
     if mep_count > 0:
         log_entries.append(f"Removed 'mep_enleve_la_nuit.indd' occurrences: {mep_count}")
 
-    return text
+    return text, log_entries
 
 # Function to process a single text file
-def process_text_file(input_file_path, output_file_path, log_file_path, phrases, titles):
+def process_text_file(input_file_path, output_file_path, log_file_path, titles):
     with open(input_file_path, 'r', encoding='utf-8') as file:
         text = file.read()
 
     log_entries = []
 
     # Identify and remove recurring patterns
-    text = identify_and_remove_recurring_patterns(text, log_entries)
+    text, recurring_log_entries = identify_and_remove_recurring_patterns(text, log_entries)
+    log_entries.extend(recurring_log_entries)
 
     # Highlight titles
     highlighted_text, title_log_entries = highlight_titles(text, titles)
@@ -197,7 +198,7 @@ def process_text_file(input_file_path, output_file_path, log_file_path, phrases,
     log_entries.extend(merge_log_entries)
 
     # Remove phrases at the start or end of paragraphs
-    cleaned_text, phrase_log_entries = remove_phrase_at_paragraph_start_or_end(merged_text, phrases)
+    cleaned_text, phrase_log_entries = remove_phrase_at_paragraph_start_or_end(merged_text, [])
     log_entries.extend(phrase_log_entries)
 
     # Remove page numbers based on the specified rules
@@ -210,58 +211,42 @@ def process_text_file(input_file_path, output_file_path, log_file_path, phrases,
     with open(log_file_path, 'w', encoding='utf-8') as log_file:
         log_file.write("\n".join(log_entries))
 
-# Function to process all text files in a directory
-def process_directory(input_directory, output_directory, log_directory, phrases, titles):
-    if not os.path.exists(output_directory):
-        os.makedirs(output_directory)
-    
-    if not os.path.exists(log_directory):
-        os.makedirs(log_directory)
+# Function to process all text files in a directory and subdirectories
+def process_directory(input_directory, output_directory):
+    for root, dirs, files in os.walk(input_directory):
+        for file_name in files:
+            if file_name.endswith('.txt') and 'log' not in file_name.lower():
+                input_file_path = os.path.join(root, file_name)
+                
+                # Determine the relative path of the subdirectory
+                relative_path = os.path.relpath(root, input_directory)
+                
+                # Create corresponding output directory
+                output_subdirectory = os.path.join(output_directory, relative_path)
+                if not os.path.exists(output_subdirectory):
+                    os.makedirs(output_subdirectory)
+                
+                # Determine the output paths for the processed text file and log file
+                output_file_path = os.path.join(output_subdirectory, file_name)
+                log_subdirectory = os.path.join(output_subdirectory, 'logs')
+                if not os.path.exists(log_subdirectory):
+                    os.makedirs(log_subdirectory)
+                log_file_path = os.path.join(log_subdirectory, f'log_{os.path.splitext(file_name)[0]}.txt')
 
-    for file_name in os.listdir(input_directory):
-        if file_name.endswith('.txt'):
-            input_file_path = os.path.join(input_directory, file_name)
-            output_file_path = os.path.join(output_directory, file_name)
-            log_file_path = os.path.join(log_directory, f'log_{os.path.splitext(file_name)[0]}.txt')
+                # Search for .md file with chapter titles in the same directory
+                md_file_path = next((os.path.join(root, f) for f in os.listdir(root) if f.endswith('.md')), None)
+                titles = []
+                if md_file_path:
+                    with open(md_file_path, 'r', encoding='utf-8') as md_file:
+                        titles = [line.strip().strip('#').strip().replace('“', '"').replace('”', '"') for line in md_file.readlines()]
 
-            print(f"Processing {file_name}...")
-            process_text_file(input_file_path, output_file_path, log_file_path, phrases, titles)
-            print(f"Processed file saved as {output_file_path}")
+                # Process the text file
+                print(f"Processing {file_name} from {root}...")
+                process_text_file(input_file_path, output_file_path, log_file_path, titles)
+                print(f"Processed file saved as {output_file_path}")
 
 if __name__ == "__main__":
     input_directory = os.path.join("../", "txt_processed/0-main_txt")
     output_directory = os.path.join("../", "txt_processed/1-page_nb_cln")
-    log_directory = os.path.join(output_directory, "logs")
-    
-    # Define the phrases and titles
-    phrases = [
-        # Add your specific phrases here
-    ]
 
-    titles = [
-    # "Introduction",
-    # "chapitre 1 L’attachement premier et le sentiment de sécurité",
-    # "1.2 Les besoins narcissiques et les premières communications",
-    # "2 Les manifestations et les conséquences de l’abandon",
-    # "2.2 Les frustrations et l’humeur triste",
-    # "2.3 L’angoisse d’abandon de l’enfant adopté",
-    # "2.4 La déprime des enfants et des adolescents",
-    # "2.5 Le préjugé envers les petits garçons",
-    # "2.6 Le déficit d’attention et l’hyperactivité",
-    # "2.7 Le besoin de présence des enfants et l’individualisme des adultes",
-    # "chapitre 3 Les apprentissages thérapeutiques et réparateurs",
-    # "3.2 Le thérapeute, objet de transition et de transfert",
-    # "3.3 La thérapie corrective avec les enfants",
-    # "3.4 La thérapie à l’âge de la puberté",
-    # "chapitre 4 Les apprentissages créatifs et régénérateurs",
-    # "4.2 La thérapie par le rêve et la thérapie par l’écriture",
-    # "4.3 Le langage de la création et de l’artiste",
-    # "4.4 Les langages de l’émotion et l’intelligence du corps",
-    # "4.5 L’environnement non humain",
-    # "Conclusion",
-    # "Glossaire",
-    # "Bibliographie",
-    # "Note de l’auteure"
-    ]
-
-    process_directory(input_directory, output_directory, log_directory, phrases, titles)
+    process_directory(input_directory, output_directory)
